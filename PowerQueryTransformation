@@ -1,0 +1,192 @@
+# Final Project Scorecard POWERQUERY Transformations
+
+## FC_TimeSheets
+let
+Source = Sql.Database("reporting.fieldcap.ca", "360EEC"),
+dbo_Timesheets = Source{[Schema="dbo",Item="Timesheets"]}[Data],
+FilteredRows = Table.SelectRows(dbo_Timesheets, each ([DeletedOn] = null)),
+AddedCustom2 = Table.AddColumn(FilteredRows, "SubWorkType ID", each 1),
+MergedQueries = Table.NestedJoin(AddedCustom2, {"UserId", "WorkTypeId", "SubWorkType ID"}, d_FC_EmployeeRates, {"UserId", "WorkTypeId", "SubWorkTypeId"}, "d_FC_EmployeeRates", JoinKind.LeftOuter),
+Expanded_d_FC_EmployeeRates = Table.ExpandTableColumn(MergedQueries, "d_FC_EmployeeRates", {"Rate"}, {"d_FC_EmployeeRates.Rate"}),
+RenamedColumns = Table.RenameColumns(Expanded_d_FC_EmployeeRates, {{"d_FC_EmployeeRates.Rate", "Emp Cost Rate"}}),
+AddedCustom = Table.AddColumn(RenamedColumns, "Labour Cost", each [Emp Cost Rate] * [Hours1]),
+ChangedType = Table.TransformColumnTypes(AddedCustom, {{"Labour Cost", type number}}),
+ExpandedClientJobs = Table.ExpandRecordColumn(ChangedType, "ClientJobs", {"PriceListId"}, {"ClientJobs.PriceListId"}),
+RenamedColumns1 = Table.RenameColumns(ExpandedClientJobs, {{"ClientJobs.PriceListId", "PriceListId"}}),
+ExpandedUsersUserId = Table.ExpandRecordColumn(RenamedColumns1, "Users(UserId)", {"IsContractor"}, {"Users(UserId).IsContractor"}),
+RenamedColumns4 = Table.RenameColumns(ExpandedUsersUserId, {{"Users(UserId).IsContractor", "IsContractor"}}),
+ChangedType1 = Table.TransformColumnTypes(RenamedColumns4, {{"IsContractor", type text}}),
+AddedCustom1 = Table.AddColumn(ChangedType1, "Category", each if [IsContractor] = "false" then "Employee" else if [IsContractor] = "true" then "Consultants" else 0),
+ReplacedValue = Table.ReplaceValue(AddedCustom1, null, "00", Replacer.ReplaceValue, {"TicketLabourEntryId"}),
+InsertedDate = Table.AddColumn(ReplacedValue, "Date", each Date.From([CreatedOn]), type date),
+ExpandedDeliverables = Table.ExpandRecordColumn(InsertedDate, "Deliverables", {"Description"}, {"Deliverables.Description"}),
+MergedQueries3 = Table.NestedJoin(ExpandedDeliverables, {"WorkTypeId", "SubWorkType ID"}, d_FC_WorkTypeItemCodes, {"WorkTypeId", "SubWorkTypeId"}, "d_FC_WorkTypeItemCodes", JoinKind.LeftOuter),
+Expanded_d_FC_WorkTypeItemCodes = Table.ExpandTableColumn(MergedQueries3, "d_FC_WorkTypeItemCodes", {"WorkTypeItemCodeId", "ChargeItemId"}, {"d_FC_WorkTypeItemCodes.WorkTypeItemCodeId", "d_FC_WorkTypeItemCodes.ChargeItemId"}),
+RenamedColumns2 = Table.RenameColumns(Expanded_d_FC_WorkTypeItemCodes, {{"d_FC_WorkTypeItemCodes.ChargeItemId", "WorkTypeChargeItemID"}, {"d_FC_WorkTypeItemCodes.WorkTypeItemCodeId", "WorkTypeItemCodeID"}}),
+RenamedColumns6 = Table.RenameColumns(RenamedColumns2, {{"WorkTypeChargeItemID", "Item ID"}}),
+MergedQueries1 = Table.NestedJoin(RenamedColumns6, {"Item ID", "PriceListId", "Deliverables.Description"}, ItemPrices, {"ItemId", "PriceListId", "Deliverable Description"}, "ItemPrices", JoinKind.LeftOuter),
+ExpandedItemPrices = Table.ExpandTableColumn(MergedQueries1, "ItemPrices", {"Price"}, {"ItemPrices.Price"}),
+RenamedColumns3 = Table.RenameColumns(ExpandedItemPrices, {{"ItemPrices.Price", "Bill Rate"}}),
+AddedCustom3 = Table.AddColumn(RenamedColumns3, "Time Entry Rev", each [Hours1] * [Bill Rate]),
+ChangedType2 = Table.TransformColumnTypes(AddedCustom3, {{"Time Entry Rev", type number}}),
+ChangedType3 = Table.TransformColumnTypes(ChangedType2, {{"SubWorkType ID", Int64.Type}})
+in
+ChangedType3
+
+## FC_TicketLabourEntries
+let
+    Source = Sql.Database("reporting.fieldcap.ca", "360EEC"),
+    dbo_TicketLabourEntries = Source{[Schema="dbo",Item="TicketLabourEntries"]}[Data],
+    #"Renamed Columns" = Table.RenameColumns(dbo_TicketLabourEntries,{{"Hours1", "Hours Worked"}, {"Rate1", "Bill Rate"}}),
+    #"Added Custom" = Table.AddColumn(#"Renamed Columns", "Labour", each [Hours Worked]*[Bill Rate]),
+    #"Changed Type" = Table.TransformColumnTypes(#"Added Custom",{{"Labour", type number}}),
+    #"Merged Queries" = Table.NestedJoin(#"Changed Type", {"EmployeeId"}, d_FC_Users, {"UserId"}, "FC_Users", JoinKind.LeftOuter),
+    #"Expanded FC_Users" = Table.ExpandTableColumn(#"Merged Queries", "FC_Users", {"IsContractor", "Full Name"}, {"FC_Users.IsContractor", "FC_Users.Full Name"}),
+    #"Renamed Columns1" = Table.RenameColumns(#"Expanded FC_Users",{{"FC_Users.IsContractor", "IsContractor"}, {"FC_Users.Full Name", "Full Name"}}),
+    #"Changed Type1" = Table.TransformColumnTypes(#"Renamed Columns1",{{"IsContractor", type text}}),
+    #"Added Custom1" = Table.AddColumn(#"Changed Type1", "Category.1", each if [IsContractor]="FALSE" then "Employee" else "Consultants"),
+    #"Added Custom3" = Table.AddColumn(#"Added Custom1", "SubWorkType", each 1),
+    #"Renamed Columns2" = Table.RenameColumns(#"Added Custom3",{{"Category.1", "Labour_Cat"}}),
+    #"Filtered Rows" = Table.SelectRows(#"Renamed Columns2", each ([DeletedOn] = null)),
+    #"Merged Queries1" = Table.NestedJoin(#"Filtered Rows", {"EmployeeId", "WorkTypeId", "SubWorkType"}, d_FC_EmployeeRates, {"UserId", "WorkTypeId", "SubWorkTypeId"}, "d_FC_EmployeeRates", JoinKind.LeftOuter),
+    #"Expanded d_FC_EmployeeRates" = Table.ExpandTableColumn(#"Merged Queries1", "d_FC_EmployeeRates", {"Rate"}, {"d_FC_EmployeeRates.Rate"}),
+    #"Renamed Columns3" = Table.RenameColumns(#"Expanded d_FC_EmployeeRates",{{"d_FC_EmployeeRates.Rate", "Emp Cost Rate"}}),
+    #"Added Custom2" = Table.AddColumn(#"Renamed Columns3", "Labour Cost", each [Emp Cost Rate]*[Hours Worked]),
+    #"Changed Type2" = Table.TransformColumnTypes(#"Added Custom2",{{"Labour Cost", type number}}),
+    #"Added Custom Column" = Table.AddColumn(#"Changed Type2", "Custom", each Text.Combine({Text.Start(Text.From([Date], "en-CA"), 4), "-", Text.Middle(Text.From([Date], "en-CA"), 4, 2), "-", Text.Middle(Text.From([Date], "en-CA"), 6, 2)}), type text),
+    #"Renamed Columns4" = Table.RenameColumns(#"Added Custom Column",{{"Custom", "Proper Date"}}),
+    #"Merged Queries2" = Table.NestedJoin(#"Renamed Columns4", {"TicketId"}, f_FC_Tickets, {"TicketId"}, "f_FC_Tickets", JoinKind.LeftOuter),
+    #"Expanded f_FC_Tickets" = Table.ExpandTableColumn(#"Merged Queries2", "f_FC_Tickets", {"ClientJobId"}, {"f_FC_Tickets.ClientJobId"}),
+    #"Changed Type3" = Table.TransformColumnTypes(#"Expanded f_FC_Tickets",{{"Proper Date", type date}}),
+    #"Renamed Columns5" = Table.RenameColumns(#"Changed Type3",{{"f_FC_Tickets.ClientJobId", "ClientJobID"}}),
+    #"Merged Queries3" = Table.NestedJoin(#"Renamed Columns5", {"WorkTypeId"}, d_FC_WorkTypes, {"WorkTypeId"}, "d_FC_WorkTypes", JoinKind.LeftOuter),
+    #"Expanded d_FC_WorkTypes" = Table.ExpandTableColumn(#"Merged Queries3", "d_FC_WorkTypes", {"WorkTypeName"}, {"d_FC_WorkTypes.WorkTypeName"}),
+    #"Renamed Columns6" = Table.RenameColumns(#"Expanded d_FC_WorkTypes",{{"d_FC_WorkTypes.WorkTypeName", "WorkType Name"}}),
+    #"Changed Type4" = Table.TransformColumnTypes(#"Renamed Columns6",{{"Billable", type text}})
+in
+    #"Changed Type4"
+
+## FC_InvoiceEntries
+let
+    Source = Sql.Database("reporting.fieldcap.ca", "360EEC"),
+    dbo_InvoiceEntries = Source{[Schema="dbo",Item="InvoiceEntries"]}[Data],
+    #"Filtered Rows" = Table.SelectRows(dbo_InvoiceEntries, each ([DeletedOn] = null)),
+    #"Expanded Invoices" = Table.ExpandRecordColumn(#"Filtered Rows", "Invoices", {"CancelledOn", "SentOn"}, {"Invoices.CancelledOn", "Invoices.SentOn"}),
+    #"Added Conditional Column" = Table.AddColumn(#"Expanded Invoices", "Inv to Client", each if [Invoices.SentOn] = null then "No" else "Yes", type text),
+    #"Filtered Rows1" = Table.SelectRows(#"Added Conditional Column", each ([Invoices.CancelledOn] = null)),
+    #"Added Custom Column" = Table.AddColumn(#"Filtered Rows1", "Custom", each Text.Combine({Text.Start([Custom8], 4), "-", Text.Middle([Custom8], 4, 2), "-", Text.Middle([Custom8], 6, 2)}), type text),
+    #"Renamed Columns" = Table.RenameColumns(#"Added Custom Column",{{"Custom", "Proper Date"}, {"Custom5", "True Deliverable ID"}}),
+    #"Changed Type" = Table.TransformColumnTypes(#"Renamed Columns",{{"Proper Date", type date}}),
+    #"Inserted Date" = Table.AddColumn(#"Changed Type", "Entry Date", each Date.From([CreatedOn]), type date),
+    #"Changed Type1" = Table.TransformColumnTypes(#"Inserted Date",{{"Entry Date", type date}}),
+    #"Replaced Value" = Table.ReplaceValue(#"Changed Type1","","00",Replacer.ReplaceValue,{"TicketId"}),
+    #"Replaced Value1" = Table.ReplaceValue(#"Replaced Value",null,"00",Replacer.ReplaceValue,{"TicketId"}),
+    #"Changed Type2" = Table.TransformColumnTypes(#"Replaced Value1",{{"True Deliverable ID", type text}}),
+    #"Uppercased Text" = Table.TransformColumns(#"Changed Type2",{{"True Deliverable ID", Text.Upper, type text}}),
+    #"Merged Queries" = Table.NestedJoin(#"Uppercased Text", {"True Deliverable ID"}, f_FC_Deliverables, {"DeliverableId"}, "f_FC_Deliverables", JoinKind.LeftOuter),
+    #"Expanded f_FC_Deliverables" = Table.ExpandTableColumn(#"Merged Queries", "f_FC_Deliverables", {"Description", "ClientJobId"}, {"f_FC_Deliverables.Description", "f_FC_Deliverables.ClientJobId"})
+in
+    #"Expanded f_FC_Deliverables"
+
+## FC_Expenses
+let
+    Source = Sql.Database("reporting.fieldcap.ca", "360EEC"),
+    dbo_Expenses = Source{[Schema="dbo",Item="Expenses"]}[Data],
+    #"Added Custom" = Table.AddColumn(dbo_Expenses, "Expense Rev", each [Price]*(1+([Markup]/100))),
+    #"Changed Type" = Table.TransformColumnTypes(#"Added Custom",{{"Expense Rev", type number}, {"Billable", type text}}),
+    #"Added Custom Column" = Table.AddColumn(#"Changed Type", "Custom", each Text.Combine({Text.Start(Text.From([ExpenseDate], "en-CA"), 4), "-", Text.Middle(Text.From([ExpenseDate], "en-CA"), 4, 2), "-", Text.Middle(Text.From([ExpenseDate], "en-CA"), 6, 2)}), type text),
+    #"Renamed Columns" = Table.RenameColumns(#"Added Custom Column",{{"Custom", "Exp Date"}, {"Custom3", "Payment Type"}, {"Custom13", "Track on Ticket"}, {"Custom15", "Received"}}),
+    #"Changed Type1" = Table.TransformColumnTypes(#"Renamed Columns",{{"Exp Date", type date}}),
+    #"Added Conditional Column" = Table.AddColumn(#"Changed Type1", "Exp Category", each 
+    if [ItemId] = 617 then "Consultants" else if [Track on Ticket]="1" then "3rd Party Track Only"
+    else if [ItemId] = 969 then "Disbursements" 
+    else if [ItemId] = 495 and [Billable] = "true" then "3rd Party Billable" 
+    else if [ItemId] = 905 and [Billable] = "true" then "3rd Party Billable" 
+    else if [ItemId] = 502 and [Billable] = "true" then "3rd Party Billable" 
+    else if [ItemId] = 908 and [Billable] = "true" then "3rd Party Billable" 
+    else if [ItemId] = 897 and [Billable] = "true" then "3rd Party Billable" 
+    else if [ItemId] = 899 and [Billable] = "true" then "3rd Party Billable" 
+    else if [ItemId] = 499 and [Billable] = "false" then "3rd Party Overhead" 
+    else if [ItemId] = 554 and [Billable] = "false" then "3rd Party Overhead" 
+    else if [Custom2] = null and [Billable] = "false" then "Disbursements"
+    else if [Custom2] <> null then
+        if [Track on Ticket] = "0" and [Billable] = "true" then "3rd Party Billable" 
+         
+        else if [Track on Ticket] = "2" then "3rd Party Billable" 
+        else if [Track on Ticket] = null then "3rd Party Billable"
+        else null
+    else if [Track on Ticket] = null and [Custom2] = null then "3rd Party Overhead" 
+    else null
+),
+    #"Expanded ClientJobs" = Table.ExpandRecordColumn(#"Added Conditional Column", "ClientJobs", {"ClientId", "ClientJobName", "JobCode"}, {"ClientJobs.ClientId", "ClientJobs.ClientJobName", "ClientJobs.JobCode"}),
+    #"Merged Queries" = Table.NestedJoin(#"Expanded ClientJobs", {"ClientJobs.ClientId"}, d_FC_BusinessPartners, {"BusinessPartnerId"}, "d_FC_BusinessPartners", JoinKind.LeftOuter),
+    #"Expanded d_FC_BusinessPartners" = Table.ExpandTableColumn(#"Merged Queries", "d_FC_BusinessPartners", {"BusinessPartnerName"}, {"d_FC_BusinessPartners.BusinessPartnerName"}),
+    #"Renamed Columns1" = Table.RenameColumns(#"Expanded d_FC_BusinessPartners",{{"d_FC_BusinessPartners.BusinessPartnerName", "Customer Name"}}),
+    #"Expanded Items" = Table.ExpandRecordColumn(#"Renamed Columns1", "Items", {"ItemName"}, {"Items.ItemName"}),
+    #"Expanded Tickets" = Table.ExpandRecordColumn(#"Expanded Items", "Tickets", {"TicketNumber"}, {"Tickets.TicketNumber"}),
+    #"Filtered Rows" = Table.SelectRows(#"Expanded Tickets", each ([DeletedOn] = null))
+in
+    #"Filtered Rows"
+
+## FC_Deliverables
+let
+    Source = Sql.Database("reporting.fieldcap.ca", "360EEC"),
+    dbo_Deliverables = Source{[Schema="dbo",Item="Deliverables"]}[Data],
+    #"Renamed Columns" = Table.RenameColumns(dbo_Deliverables,{{"Quantity", "PlannedHours"}, {"Custom2", "C/O Budget"}, {"Custom3", "Rem"}, {"Custom4", "IsCompleted"}, {"Custom5", "Total Revenue"}, {"Custom6", "Actual Cost"}, {"Custom7", "Actual Hours"}}),
+    #"Replaced Value" = Table.ReplaceValue(#"Renamed Columns",null,"0",Replacer.ReplaceValue,{"Total Revenue"}),
+    #"Changed Type" = Table.TransformColumnTypes(#"Replaced Value",{{"Total Revenue", type number}}),
+    #"Replaced Value1" = Table.ReplaceValue(#"Changed Type",null,0,Replacer.ReplaceValue,{"C/O Budget", "Rem", "IsCompleted", "Total Revenue", "Actual Cost", "Actual Hours"}),
+    #"Changed Type1" = Table.TransformColumnTypes(#"Replaced Value1",{{"Actual Cost", type number}, {"Actual Hours", type number}, {"Custom8", type number}, {"Rem", type number}}),
+    #"Added Custom" = Table.AddColumn(#"Changed Type1", "IsComplete(Y/N)", each if [IsCompleted]="0" then "N" else "Y"),
+    #"Filtered Rows" = Table.SelectRows(#"Added Custom", each ([DeletedOn] = null)),
+    #"Inserted Merged Column" = Table.AddColumn(#"Filtered Rows", "Merged", each Text.Combine({[Description], " ", Text.From([ClientJobId], "en-CA")}), type text),
+    #"Changed Type2" = Table.TransformColumnTypes(#"Inserted Merged Column",{{"DeliverableId", type text}})
+in
+    #"Changed Type2"
+
+## FC_ClientJobs
+let
+    Source = Sql.Database("reporting.fieldcap.ca", "360EEC"),
+    dbo_Deliverables = Source{[Schema="dbo",Item="Deliverables"]}[Data],
+    #"Renamed Columns" = Table.RenameColumns(dbo_Deliverables,{{"Quantity", "PlannedHours"}, {"Custom2", "C/O Budget"}, {"Custom3", "Rem"}, {"Custom4", "IsCompleted"}, {"Custom5", "Total Revenue"}, {"Custom6", "Actual Cost"}, {"Custom7", "Actual Hours"}}),
+    #"Replaced Value" = Table.ReplaceValue(#"Renamed Columns",null,"0",Replacer.ReplaceValue,{"Total Revenue"}),
+    #"Changed Type" = Table.TransformColumnTypes(#"Replaced Value",{{"Total Revenue", type number}}),
+    #"Replaced Value1" = Table.ReplaceValue(#"Changed Type",null,0,Replacer.ReplaceValue,{"C/O Budget", "Rem", "IsCompleted", "Total Revenue", "Actual Cost", "Actual Hours"}),
+    #"Changed Type1" = Table.TransformColumnTypes(#"Replaced Value1",{{"Actual Cost", type number}, {"Actual Hours", type number}, {"Custom8", type number}, {"Rem", type number}}),
+    #"Added Custom" = Table.AddColumn(#"Changed Type1", "IsComplete(Y/N)", each if [IsCompleted]="0" then "N" else "Y"),
+    #"Filtered Rows" = Table.SelectRows(#"Added Custom", each ([DeletedOn] = null)),
+    #"Inserted Merged Column" = Table.AddColumn(#"Filtered Rows", "Merged", each Text.Combine({[Description], " ", Text.From([ClientJobId], "en-CA")}), type text),
+    #"Changed Type2" = Table.TransformColumnTypes(#"Inserted Merged Column",{{"DeliverableId", type text}})
+in
+    #"Changed Type2"
+
+## FC_TicketItemEntries
+let
+    Source = Sql.Database("reporting.fieldcap.ca", "360EEC"),
+    dbo_FC_TicketItemEntries = Source{[Schema="dbo",Item="TicketItemEntries"]}[Data],
+    #"Filtered Rows" = Table.SelectRows(dbo_FC_TicketItemEntries, each ([DeletedOn] = null)),
+    #"Added Custom" = Table.AddColumn(#"Filtered Rows", "Item Cost", each [Rate]*[Quantity]),
+    #"Changed Type" = Table.TransformColumnTypes(#"Added Custom",{{"Item Cost", type number}, {"Billable", type text}}),
+    #"Merged Queries" = Table.NestedJoin(#"Changed Type", {"TicketId"}, f_FC_Tickets, {"TicketId"}, "f_FC_Tickets", JoinKind.LeftOuter),
+    #"Expanded f_FC_Tickets" = Table.ExpandTableColumn(#"Merged Queries", "f_FC_Tickets", {"ClientJobId"}, {"f_FC_Tickets.ClientJobId"}),
+    #"Renamed Columns" = Table.RenameColumns(#"Expanded f_FC_Tickets",{{"Category", "FC Category"}}),
+    #"Merged Queries1" = Table.NestedJoin(#"Renamed Columns", {"ItemId"}, d_FC_Items, {"ItemId"}, "d_FC_Items", JoinKind.LeftOuter),
+    #"Expanded d_FC_Items1" = Table.ExpandTableColumn(#"Merged Queries1", "d_FC_Items", {"ItemName", "Categories"}, {"d_FC_Items.ItemName", "d_FC_Items.Categories"}),
+    #"Renamed Columns1" = Table.RenameColumns(#"Expanded d_FC_Items1",{{"d_FC_Items.ItemName", "Item Name"}, {"f_FC_Tickets.ClientJobId", "ClientJobId"}, {"d_FC_Items.Categories", "FC Item Category"}}),
+    #"Filtered Rows1" = Table.SelectRows(#"Renamed Columns1", each true),
+    #"Added Conditional Column" = Table.AddColumn(
+    #"Filtered Rows1", 
+    "Rev Category", 
+    each 
+        if Text.Contains([FC Item Category], "|Disbursement|") then 
+            "Disbursements" 
+        else if Text.Contains([FC Item Category], "|Truck|") or Text.Contains([FC Item Category], "|Other|") then 
+            "Equipment" 
+        else if Text.Contains([FC Item Category], "|Service|") and [Billable] = "true" then 
+            "3rd Party Billable" 
+        else 
+            null
+),
+    #"Changed Type1" = Table.TransformColumnTypes(#"Added Conditional Column",{{"CreatedOn", type date}})
+in
+    #"Changed Type1"
