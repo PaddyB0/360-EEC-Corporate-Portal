@@ -1,0 +1,58 @@
+### KEY ITEM TRANSFORMATIONS
+
+## fct_FCExpenses
+let
+    Source = PowerPlatform.Dataflows(null),
+    Workspaces = Source{[Id="Workspaces"]}[Data],
+    #"6df063ae-bc2f-4d84-8ed1-7b2b09e04836" = Workspaces{[workspaceId="6df063ae-bc2f-4d84-8ed1-7b2b09e04836"]}[Data],
+    #"a2ae6605-be1c-4a02-b99f-050812985cf7" = #"6df063ae-bc2f-4d84-8ed1-7b2b09e04836"{[dataflowId="a2ae6605-be1c-4a02-b99f-050812985cf7"]}[Data],
+    FC_Expenses_ = #"a2ae6605-be1c-4a02-b99f-050812985cf7"{[entity="FC_Expenses",version=""]}[Data],
+    #"Filtered Rows" = Table.SelectRows(FC_Expenses_, each ([DeletedOn] = null)),
+    #"Replaced Value" = Table.ReplaceValue(#"Filtered Rows","",null,Replacer.ReplaceValue,{"Received"}),
+    #"Merged Queries" = Table.NestedJoin(#"Replaced Value", {"UserId"}, dim_FCUsers, {"UserId"}, "dim_FCUsers", JoinKind.LeftOuter),
+    #"Expanded dim_FCUsers" = Table.ExpandTableColumn(#"Merged Queries", "dim_FCUsers", {"IsContractor"}, {"dim_FCUsers.IsContractor"}),
+    #"Merged Queries1" = Table.NestedJoin(#"Expanded dim_FCUsers", {"ItemId"}, dim_FCItems, {"ItemId"}, "dim_FCItems", JoinKind.LeftOuter),
+    #"Expanded dim_FCItems" = Table.ExpandTableColumn(#"Merged Queries1", "dim_FCItems", {"Full_ItemName"}, {"dim_FCItems.Full_ItemName"}),
+    #"Renamed Columns" = Table.RenameColumns(#"Expanded dim_FCItems",{{"dim_FCItems.Full_ItemName", "Full_ItemName"}, {"dim_FCUsers.IsContractor", "IsContractor"}}),
+    #"Added inc_accountid" = Table.AddColumn(#"Renamed Columns", "inc_accountid", 
+each if [ItemId] = "969" then "774" else if [ItemId] = "494" then "774"
+else if [ItemId] = "616" then "776" else if [ItemId] = "617" then "776"
+else if [IsContractor] = false and ([ItemId] = "498" or [ItemId] = "503" or [ItemId] = "611" or [ItemId] = "620" or [ItemId] = "621" or [ItemId] = "896" or [ItemId] = "940" or [ItemId] = "1327" or [ItemId] = "1376") then "776"
+else if [ItemId] = "495" then "778" else if [ItemId] = "499" then "778" else if [ItemId] = "554" then "778" else if [ItemId] = "526" then "778" else if [ItemId] = "556" then "778" else if [ItemId] = "502" then "778" else if [ItemId] = "504" then "778"
+else if [IsContractor] = true and ([ItemId] = "498" or [ItemId] = "503" or [ItemId] = "611" or [ItemId] = "620" or [ItemId] = "621" or [ItemId] = "896" or [ItemId] = "940" or [ItemId] = "1327" or [ItemId] = "1376") then "776"
+else "780"),
+    #"Added exp_accountid" = Table.AddColumn(#"Added inc_accountid", "exp_accountid", each if [inc_accountid] = "774" then 786 else if [inc_accountid] = "780" then 557 else if [inc_accountid] = "903" then 876 else if [inc_accountid] = "778" then 875 else if [inc_accountid] = "776" then 785 else if [inc_accountid] = "1036" then 1037 
+else if [ItemId] = "488" then "825" else if [ItemId] = "558" then "820" else if [ItemId] = "561" then "913" else if [ItemId] = "562" then "953" else if [ItemId] = "563" then "825" else if [ItemId] = "564" then "819" else if [ItemId] = "565" then "819" else if [ItemId] = "567" then "969" else if [ItemId] = "568" then "1015" else if [ItemId] = "569" then "1004" else if [ItemId] = "570" then "953" else if [ItemId] = "571" then "827" else if [ItemId] = "572" then "818" else if [ItemId] = "573" then "819" else if [ItemId] = "574" then "965" else if [ItemId] = "575" then "1366" else if [ItemId] = "576" then "1247" else if [ItemId] = "578" then "815" else if [ItemId] = "579" then "815" else if [ItemId] = "582" then "822" else if [ItemId] = "583" then "822" else if [ItemId] = "586" then "825" else if [ItemId] = "587" then "953" else if [ItemId] = "589" then "811" else if [ItemId] = "590" then "812" else if [ItemId] = "591" then "811" else if [ItemId] = "592" then "817" else if [ItemId] = "594" then "810" else if [ItemId] = "596" then "878" else if [ItemId] = "597" then "1004" else if [ItemId] = "598" then "812" else if [ItemId] = "599" then "832" else if [ItemId] = "602" then "810" else if [ItemId] = "603" then "818" else if [ItemId] = "604" then "828" else if [ItemId] = "605" then "830"
+else null),
+    #"Changed Type" = Table.TransformColumnTypes(#"Added exp_accountid",{{"inc_accountid", type text}, {"exp_accountid", type text}})
+in
+    #"Changed Type"
+
+## fct_TicketItemEntries
+let
+    Source = PowerPlatform.Dataflows(null),
+    Workspaces = Source{[Id="Workspaces"]}[Data],
+    #"6df063ae-bc2f-4d84-8ed1-7b2b09e04836" = Workspaces{[workspaceId="6df063ae-bc2f-4d84-8ed1-7b2b09e04836"]}[Data],
+    #"a2ae6605-be1c-4a02-b99f-050812985cf7" = #"6df063ae-bc2f-4d84-8ed1-7b2b09e04836"{[dataflowId="a2ae6605-be1c-4a02-b99f-050812985cf7"]}[Data],
+    FC_TicketItemEntries_ = #"a2ae6605-be1c-4a02-b99f-050812985cf7"{[entity="FC_TicketItemEntries",version=""]}[Data],
+    #"Filtered Rows" = Table.SelectRows(FC_TicketItemEntries_, each ([DeletedOn] = null)),
+    #"Merged Queries" = Table.NestedJoin(#"Filtered Rows", {"ItemSerialId", "ItemId"}, dim_FCItemSerials, {"ItemSerialId", "ItemId"}, "dim_FCItemSerials", JoinKind.LeftOuter),
+    #"Expanded dim_FCItemSerials" = Table.ExpandTableColumn(#"Merged Queries", "dim_FCItemSerials", {"inc_accountid"}, {"dim_FCItemSerials.inc_accountid"}),
+    #"Renamed Columns" = Table.RenameColumns(#"Expanded dim_FCItemSerials",{{"dim_FCItemSerials.inc_accountid", "SerialIncAccount"}}),
+    #"Replaced Value" = Table.ReplaceValue(#"Renamed Columns",null,"00",Replacer.ReplaceValue,{"SerialIncAccount"}),
+    #"Added Conditional Column" = Table.AddColumn(#"Replaced Value", "inc_accountid", 
+each if [SerialIncAccount] = "00" and ([ItemId] = "249" or [ItemId] = "122" or [ItemId] = "92" or [ItemId] = "53" or [ItemId] = "13" or [ItemId] = "11") then "780"
+else if [SerialIncAccount] = "00" and ([ItemId] = "1778" or [ItemId] = "70" or [ItemId] = "21" or [ItemId] = "20" or [ItemId] = "488") then "778"
+else if [SerialIncAccount] = "00" and ([ItemId] = "1774" or [ItemId] = "1773" or [ItemId] = "1772" or [ItemId] = "1766" or [ItemId] = "1419" or [ItemId] = "1372" or [ItemId] = "1328" or [ItemId] = "1270" or [ItemId] = "1203" or [ItemId] = "916" or [ItemId] = "611" or [ItemId] = "548" or [ItemId] = "464" or [ItemId] = "460" or [ItemId] = "459" or [ItemId] = "458" or [ItemId] = "457" or [ItemId] = "46" or [ItemId] = "42" or [ItemId] = "23" or [ItemId] = "22" or [ItemId] = "15" or [ItemId] = "49" or [ItemId] = "44" or [ItemId] = "43" or [ItemId] = "26" or [ItemId] = "25" or [ItemId] = "24" or [ItemId] = "18") then "774"
+else if [SerialIncAccount] = "00" and ([ItemId] = "528" or [ItemId] = "520" or [ItemId] = "67" or [ItemId] = "64" or [ItemId] = "61" or [ItemId] = "58" or [ItemId] = "55" or [ItemId] = "52" or [ItemId] = "51" or [ItemId] = "45" or [ItemId] = "19" or [ItemId] = "17" or [ItemId] = "14") then "903"
+else if [SerialIncAccount] = "00" and ([ItemId] = "923" or [ItemId] = "920" or [ItemId] = "914") then "1036"
+else if [SerialIncAccount] = "00" and ([ItemId] = "488" or [ItemId] = "462" or [ItemId] = "914") then "776"
+
+else [SerialIncAccount]),
+    #"Added Conditional Column1" = Table.AddColumn(#"Added Conditional Column", "exp_accountid", each if [inc_accountid] = "774" then 786 else if [inc_accountid] = "780" then 557 else if [inc_accountid] = "903" then 876 else if [inc_accountid] = "778" then 875 else if [inc_accountid] = "776" then 785 else if [inc_accountid] = "1036" then 1037 else 0),
+    #"Changed Type" = Table.TransformColumnTypes(#"Added Conditional Column1",{{"inc_accountid", type text}, {"exp_accountid", type text}}),
+    #"Merged Queries1" = Table.NestedJoin(#"Changed Type", {"TicketId"}, dim_FCTickets, {"TicketId"}, "dim_FCTickets", JoinKind.LeftOuter),
+    #"Expanded dim_FCTickets" = Table.ExpandTableColumn(#"Merged Queries1", "dim_FCTickets", {"TicketDate_Formatted"}, {"dim_FCTickets.TicketDate_Formatted"}),
+    #"Renamed Columns1" = Table.RenameColumns(#"Expanded dim_FCTickets",{{"dim_FCTickets.TicketDate_Formatted", "TicketDate"}})
+in
+    #"Renamed Columns1"
