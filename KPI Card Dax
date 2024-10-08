@@ -1,0 +1,216 @@
+// KPI Card Dax Measures
+
+1_SUM Measures = SUM(Value)
+
+//Step 2 Date Measures
+2_MaxDate =
+CALCULATE(
+    MAX(Data[Date]),
+    REMOVEFILTERS('Date'[Date]))
+2_MinDate
+CALCULATE(
+    MIN(Data[Date]),
+    REMOVEFILTERS('Date'[Date]))
+
+//STEP 3
+3_Selected Dates = SELECTEDVALUE('Date Selection'[Date Selection])
+
+3_Selected Measure = 
+SWITCH(
+    SELECTEDVALUE('Measure Sel'[Measure Name]),
+    "New Followers", [1_New Followers],
+    "Total Engagements", [1_Total Engagements],
+    "Total Impressions", [1_Total Impressions])
+
+3_Selected Min Date = 
+Var MaxDate = [2_MaxDate] +1
+VAR MinDate = [2_MinDate] -1
+RETURN
+SWITCH([3_Selected Dates],
+    "1W",MaxDate -7,
+    "1M",EDATE(MaxDate, -1),
+    "3M",EDATE(MaxDate, -3),
+    "TY",DATE(YEAR(MaxDate), 1, 1),
+    "1Y",EDATE(MaxDate, -12),
+    "ALL",MinDate )
+
+3_Selected Min Date Past Period = 
+Var MaxDate = [3_Selected Min Date] -1
+VAR MinDate2 = [2_MinDate] -1
+RETURN
+SWITCH([3_Selected Dates],
+    "1W",MaxDate -7,
+    "1M",EDATE(MaxDate, -1),
+    "3M",EDATE(MaxDate, -3),
+    "TY",DATE(YEAR(MaxDate), 1, 1),
+    "1Y",EDATE(MaxDate, -12),
+    "ALL",MinDate2 )
+
+// Step 4 Date Parameters
+4_SM Date Param = 
+CALCULATE(
+    [3_Selected Measure],
+    KEEPFILTERS(
+        DATESBETWEEN(
+            'Date'[Date],                 
+            [3_Selected Min Date],
+            [2_MaxDate]
+         ))
+    )
+
+4_SM Date Param Past Period = 
+CALCULATE(
+    [3_Selected Measure],
+    KEEPFILTERS(
+        DATESBETWEEN(
+            'Date'[Date],       
+            [3_Selected Min Date Past Period],                      
+            [3_Selected Min Date]
+         ))
+    )
+
+//Step 5 Moving Average
+5_Moving Average Selection = 
+//get the selected moving average value from the disconnected table
+SELECTEDVALUE('Moving Average'[Days])
+
+5_SM Moving Average = 
+    AVERAGEX(                                   
+    DATESINPERIOD(                          //the dates from:                     
+        'Date'[Date],                       //Current Date
+        LASTDATE(                           //Current Date - #Selected Months
+            'Date'[Date] ), 
+            -[5_Moving Average Selection], 
+            DAY                           
+            ),                              
+         [3_Selected Measure]               //For the selected measure
+         )
+
+5_SM Moving Average Date Param = 
+if(ISBLANK([3_Selected Measure]), blank(),
+CALCULATE(
+    [5_SM Moving Average],
+    KEEPFILTERS(
+        DATESBETWEEN(
+            'Date'[Date],                 
+            [3_Selected Min Date],
+            [2_MaxDate]
+         ))
+    )
+)
+
+//Step 6 Date Parameter Deltas
+6_SM Date Param Delta = 
+[4_SM Date Param] - [4_SM Date Param Past Period]
+
+6_SM Date Param Delta % = 
+DIVIDE( [6_SM Date Param Delta], [4_SM Date Param Past Period])
+
+//Step 7 Reference Labels
+7_SM Past Period Reference Label = 
+var _Current = [4_SM Date Param]
+var _LY = [4_SM Date Param Past Period]
+var _Growth = DIVIDE(_Current - _LY, _LY)
+VAR NumOfDigits =
+    IFERROR(
+            LEN( 
+                CONVERT( 
+                        INT( 
+                           [4_SM Date Param])
+                        , STRING ))
+            ,0)
+VAR Suffix =
+    ".0" &
+    SWITCH(
+        TRUE( ),
+        NumOfDigits >= 13,  "T",
+        NumOfDigits >= 10,  "B",
+        NumOfDigits >= 7,   "M",
+        NumOfDigits >= 4,   "K"
+    )
+VAR Commas =
+    REPT(",",
+        SWITCH(
+            TRUE( ),
+            NumOfDigits >= 13,  "4",
+            NumOfDigits >= 10,  "3",
+            NumOfDigits >= 7,   "2",
+            NumOfDigits >= 4,   "1"
+        )
+    )
+var _Format =     "#,##0" & Commas & Suffix & ";-#,##0" & Commas &Suffix 
+return
+IF (_Growth <> 0, 
+    
+"" &FORMAT(_Current-_LY, _Format)
+    &  
+        FORMAT(_Growth," | 0.0% ▲; | 0.0% ▼;")& ""," ")
+
+
+7_SM Past Period subtitle = 
+var _LY = [4_SM Date Param Past Period]
+VAR NumOfDigits =
+    IFERROR(
+            LEN( 
+                CONVERT( 
+                        INT( 
+                           _LY)
+                        , STRING ))
+            ,0)
+VAR Suffix =
+    ".00" &
+    SWITCH(
+        TRUE( ),
+        NumOfDigits >= 13,  "T",
+        NumOfDigits >= 10,  "B",
+        NumOfDigits >= 7,   "M",
+        NumOfDigits >= 4,   "K"
+    )
+VAR Commas =
+    REPT(",",
+        SWITCH(
+            TRUE( ),
+            NumOfDigits >= 13,  "4",
+            NumOfDigits >= 10,  "3",
+            NumOfDigits >= 7,   "2",
+            NumOfDigits >= 4,   "1"
+        )
+    )
+var _Format =     "#,##0" & Commas & Suffix & ";-#,##0" & Commas &Suffix 
+var _Time = 
+    SWITCH([3_Selected Dates],
+    "1W", "Previous Week: ",
+    "1M","Previous Month: ",
+    "3M","Previous 3 Months: ",
+    "TY","Previous Year Period: ",
+    "1Y","Previous Year: ")
+return
+_Time  &FORMAT(_LY, _Format)
+
+
+//Step 8 Reference Label BG Colour
+8_Reference Label Background Color = 
+VAR x = [6_SM Date Param Delta] RETURN
+SWITCH(TRUE(),
+    x > 0 , "#E7F3F5", //Green
+    x < 0, "#F6EDED") // red
+
+8_Reference Label Font Color = 
+VAR x = [6_SM Date Param Delta] RETURN
+SWITCH(TRUE(),
+    x > 0 , "#038D96", //Green
+    x < 0, "#A84545") // red
+
+//Step 9 Selected Measure Text
+9_Selected measure Text = SELECTEDVALUE('Measure Sel'[Measure Name])
+
+9_Y axis MAX = 
+CALCULATE (
+    MAXX ( VALUES ( Data[Date] ), [3_Selected Measure] ),
+    KEEPFILTERS(
+        DATESBETWEEN(
+            'Date'[Date],                 
+            [3_Selected Min Date],
+            [2_MaxDate]
+         ))
+)
